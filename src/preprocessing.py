@@ -3,60 +3,74 @@ import glob
 import os
 import time
 
-
-def preprocess_and_clean(data_path):
+def ejecutar_limpieza_detective(ruta_data):
     start_time = time.time()
     
-    # 1. CARGA RECURSIVA
-    search_pattern = os.path.join(data_path, "**", "*.xlsx")
+    # 1. BUSCAR ARCHIVOS
+    search_pattern = os.path.join(ruta_data, "**", "*.xlsx")
     files = glob.glob(search_pattern, recursive=True)
     all_data = []
 
-    print(f">>> Se detectaron {len(files)} archivos. Iniciando carga...")
+    print(f"\n>>> Analizando {len(files)} archivos...")
 
-    for i, f in enumerate(files, 1):
+    for f in files:
         try:
-            # Mostramos progreso
-            print(f"[{i}/{len(files)}] Procesando: {os.path.basename(f)}...", end="\r")
-            
+            # Leer el Excel
             temp_df = pd.read_excel(f)
-            temp_df.columns = temp_df.columns.str.upper()
-            all_data.append(temp_df)
+            
+            # Limpiar nombres de columnas (quitar espacios invisibles)
+            temp_df.columns = temp_df.columns.str.strip().str.upper()
+            
+            # --- EL DETECTIVE ---
+            if 'ANO_REG' in temp_df.columns:
+                # Ver que años tiene este archivo antes de filtrar
+                anios_unicos = temp_df['ANO_REG'].dropna().unique()
+                print(f"ARCHIVO: {os.path.basename(f)} | AÑOS DETECTADOS: {list(anios_unicos)[:5]}...")
+                all_data.append(temp_df)
+            else:
+                print(f"!!! ERROR: El archivo {os.path.basename(f)} NO tiene la columna ANO_REG")
+                print(f"Columnas encontradas: {list(temp_df.columns)[:5]}")
+                
         except Exception as e:
-            print(f"\nError en {f}: {e}")
+            print(f"No se pudo leer {os.path.basename(f)}: {e}")
 
-    print(f"\n>>> Carga completada en {round(time.time() - start_time, 2)} segundos.")
-    print(">>> Unificando datos y limpiando...")
-    
+    if not all_data:
+        print("\n!!! ERROR CRÍTICO: No se cargó ningún dato. Revisa tus archivos Excel.")
+        return
+
+    # Unir todo
     df = pd.concat(all_data, ignore_index=True)
 
-    # 2. LIMPIEZA DE DATOS
-    # Eliminar columnas con más del 50% de nulos
-    limit = len(df) * 0.5
-    df = df.dropna(thresh=limit, axis=1)
+    # 2. ASEGURAR QUE LOS AÑOS SEAN NÚMEROS
+    df['ANO_REG'] = pd.to_numeric(df['ANO_REG'], errors='coerce')
 
-    # Eliminar columnas constantes (varianza cero)
-    df = df.loc[:, df.nunique() > 1]
+    # --- AQUÍ ESTÁ LA CORRECCIÓN CLAVE ---
+    # Si el año es menor a 100 (ej. 85, 90, 97), le sumamos 1900
+    df.loc[df['ANO_REG'] < 100, 'ANO_REG'] += 1900
+    print(">>> Se normalizaron años de 2 dígitos (ej. 85 -> 1985)")
+    # -------------------------------------
 
-    # 3. MANEJO DE NULOS (Imputación por moda)
-    for col in df.columns:
-        if df[col].isnull().any():
-            df[col] = df[col].fillna(df[col].mode()[0])
+    # 3. FILTRAR (Ahora sí incluirá desde 1985 correctamente)
+    df_filtrado = df[(df['ANO_REG'] >= 1985) & (df['ANO_REG'] <= 2024)].copy()
 
-    # 4. EXPORTAR A CSV (Este archivo será tu base para el modelo)
-    output_path = os.path.join(data_path, "dataset_limpio.csv")
-    print(f">>> Guardando dataset limpio en {output_path}...")
-    df.to_csv(output_path, index=False)
+    # 4. GUARDAR
+    output_path = os.path.join(ruta_data, "dataset_limpio.csv")
+    df_filtrado.to_csv(output_path, index=False)
 
-    print("\n" + "="*40)
-    print("REPORTE DE DATOS LIMPIOS")
-    print("="*40)
-    print(f"Registros totales: {df.shape[0]}")
-    print(f"Columnas finales: {df.shape[1]}")
-    print(f"Tiempo total: {round((time.time() - start_time)/60, 2)} minutos.")
+    print("\n" + "="*50)
+    print("                REPORTE FINAL")
+    print("="*50)
+    print(f"Registros encontrados en total: {len(df):,}")
+    print(f"Registros que sobrevivieron al filtro (1985-2024): {len(df_filtrado):,}")
     
-    return df
+    # Verificamos si realmente hay datos viejos
+    anios_finales = sorted(df_filtrado['ANO_REG'].unique().astype(int))
+    print(f"Años que quedaron en el archivo final: {anios_finales}")
+    print("="*50)
 
+# --- EJECUCIÓN DIRECTA ---
 if __name__ == "__main__":
-    # Asegúrate de que la ruta 'data/' es correcta en tu PC
-    df_clean = preprocess_and_clean("data/")
+    # Detectar carpeta
+    ruta = "data/" if os.path.exists("data/") else "../data/"
+    print(f"Iniciando limpieza en: {os.path.abspath(ruta)}")
+    ejecutar_limpieza_detective(ruta)
