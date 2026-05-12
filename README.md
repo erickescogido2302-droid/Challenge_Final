@@ -8,7 +8,7 @@ El estudio revela un cambio demográfico significativo: la tasa de natalidad en 
 ### Hallazgos Clave:
 * **Periodo analizado:** 1985 - 2024.
 * **Proyecciones:** Estimaciones de natalidad para 2025 y 2026 basadas en regresión lineal de la tendencia de la última década.
-* **Rendimiento del Modelo:** Se logró un **98% de precisión (Accuracy)** en el análisis de tendencias y clasificación.
+* **Rendimiento del Modelo:** Se logró un **&approx;98% de precisión (Accuracy)** en el análisis de tendencias y clasificación.
 
 ---
 
